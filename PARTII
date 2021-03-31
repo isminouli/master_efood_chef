@@ -1,0 +1,13 @@
+A. This part is the proposal for the development plan for the team, in order to achieve the transformation into a team of Insights in the coming 12 months.It is answered by utilizing the information given for Alex, Belinda, Chris & Demi and using the padlet app (https://padlet.com/). The Development plan for the BI team can be found in the page here: https://padlet.com/isavvala/6d72ztm6d6b0tgwe.
+
+B. The Lifetime Value Prediction project provides insights on customer segments that interacted with different cuisines, days, hours, cities specifically in month January. In terms of data needs, data modelling, data presentation and how the project backlog would be assigned to the team members based on their goals:
+
+* data needs with business sense - Alex (Sales) with Belinda (Marketing) providing the business to other members to be able to define critical factors for customer segmantation
+* data management - Chris with Demi supervised by Belinda
+** Chris to incorporate the business logic with needed data 
+** Demi to advance her SQL/python technical skills
+* data modelling
+** Alex with Chris to look for an analytical, creative and business solid solution
+* data presentation - driven and prepared by Demi and ALex; though all BI members participate to provide insights based on business sense
+
+After discussing with Belinda the necessary steps, she will be the one to incorporate them in JIRA and assigned them to the members of the team. In parallel, she would follow up with the progress of the items.
