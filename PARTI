@@ -1,0 +1,271 @@
+rm(list = ls())
+
+# Install the necessary packages if they are not already installed
+install.packages("devtools")
+install.packages("lubridate")
+install.packages("data.table")
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("tidyr")
+install.packages("knitr")
+install.packages("rmarkdown") 
+install.packages("readxl")
+install.packages("bigrquery")
+install.packages("DBI")
+install.packages("rfm")
+install.packages("scales")
+install.packages("rpart")
+install.packages("rpart.plot")
+
+#Load the necessary libraries
+library(bigrquery) # R Interface to Google BigQuery API  
+library(dplyr) # Grammar for data manipulation  
+library(DBI) # Interface definition to connect to databases 
+library(ggplot2) # Data Viz package
+library(data.table)
+library(rfm)
+library(tidyr)
+library(knitr)
+library(scales)
+library(rpart)
+library(rpart.plot)
+
+#The first step is to create a connection to the BigQuery project and the data set. 
+#This is done by using the DBI and bigrquery packages and passing the project id and data set id as parameters.
+
+projectid<-'bi-2019-test'
+datasetid<-'ad_hoc'
+
+bq_conn <-  dbConnect(bigquery(), 
+                            project = projectid,
+                            dataset = datasetid, 
+                            use_legacy_sql = FALSE
+                      )
+
+#To view the list of tables in BigQuery dataset, use the dbListTables function with the connection details object as a parameter
+
+bigrquery::dbListTables(bq_conn)
+
+# SQL queries can be submitted to BigQuery from R using the bq_perform_query function. 
+# bq_project_query creates an object of class bq_query and the query results can be viewed by passing the object to bq_table_download function.
+# We select the necessary columns for the Lifetime Value analysis
+
+sql_query_data <-
+  "SELECT order_id, submit_dt, user_id, shop_id, cuisine_parent, basket 
+	FROM `bi-2019-test.ad_hoc.orders_jan2021`"
+  
+  data <- bq_project_query(projectid, sql_query_data)
+  bq_table_download(data)
+  
+#The above code is taken from "Handling large data sets with Google BigQuery and R" (https://rpubs.com/shivanandiyer/BigRQuery). 
+#Here the project could have been finalised, as I had issues to acquire the table, or learn how the Big Query is compatible with R.
+#There were also issues that the order_id is nullable column, city is not recognised as contains greek characters.
+#Though, I continued it from extracting the data from BigQuery Cloud, and by using the DataStudio, creating the 
+#weekday, hour and minute columns. I downloaded it to Excel, manipulated the greek cirties into latin characters. Then I transformed it 
+#to CSV file and I was able to continue with the analysis.
+
+#Set the local working directory
+setwd("C:/.../efood_case_study")
+
+#Read in the CSV data
+data <- read.csv("data_full_case_study.csv",
+		     header = TRUE, sep = ",", dec = ".",
+                 encoding = "UTF-8", stringsAsFactors = F)
+
+#Request the dim of data
+dim(data)
+#400000 11
+
+# Get unique customers
+uid <- data[!duplicated(data[,4]),]
+dim(uid)
+#There are 162,954 unique customers
+
+#Based on the above metrics, it is sure that the dataset is correctly extracted, and that we have on average ~2.45 orders per customer.
+
+# Request the summary of data
+summary(data)
+
+#Get summary views on the other variables we have
+df_day <- data %>%   
+            group_by(weekday) %>%   
+		summarise(customers = n_distinct(user_id),
+		frequency=n_distinct(order_id),monetary= sum(basket),
+            monetary_mean= sum(basket)/n_distinct(order_id))
+            
+#Approaching towards the weekend, the frequency is increasing along with the monetary, and the lowest day is Monday.
+
+df_city <- data %>%   
+            group_by(city_in_english) %>%   
+		summarise(customers = n_distinct(user_id),
+		frequency=n_distinct(order_id),monetery= sum(basket),
+            monetery_mean= sum(basket)/n_distinct(order_id))
+head(arrange(df_city,desc(monetery)), n = 50)
+
+#The top populated cities are having the big stake of the market, with Chania and Rhodes to follow respectively
+#From the result, the alerting finding is the distribution of basket that includes 0 value and 151.85 value. The basket Median is 6.8 and Mean is 8.723. 
+#We need to further look into the distribution of basket column. 
+
+hist(data$basket, breaks=50)
+boxplot(data$basket)
+
+#Create a table of basket factor to check 
+fac_basket <- table(cut(data$basket, br = 20))
+
+#It is advisable to remove orders that have basket less than 1.2 and more than 90
+
+data_fin <- subset(data, (data$basket<90) & (data$basket>1.2))
+dim(data_fin)
+# 399731     11
+#We lost 269 orders (0.067% of rows)
+
+#Create the User frequency
+User_Frequency <- data_fin %>%
+  group_by(user_id) %>%
+  summarise(Frequency = n())
+
+#Check the distribution of User_Frequency
+summary(User_Frequency$Frequency)
+
+#There is a remmarkable difference between the 3rd Quartile and Max value, the boxplot graph will be divided in two.
+#1st Boxplot Graph - Customers below the 3rd Quartile
+#2nd Boxplot Graph - Customers in the 4th Quartile
+
+Below_3Q <- User_Frequency %>%
+  filter(Frequency <= 3)
+
+Outliers <- User_Frequency %>%
+  filter(Frequency >= 10)
+
+# Plotting first 3 Quartile
+Below_3Q_Visz <- ggplot(Below_3Q, aes(user_id, Frequency)) +
+  geom_boxplot() +
+  ylab('Number of Purchases per Customer') +
+  ggtitle('Purchase Frequency - First 3 Quartiles') +
+  theme(axis.ticks.x = element_blank()) +
+  theme_minimal() 
+print(Below_3Q_Visz)
+
+# Plotting last Quartile
+Outliers_Visz <- ggplot(Outliers, aes(user_id, Frequency)) +
+  geom_boxplot() +
+  ylab('Number of Purchases per Customer') +
+  scale_y_continuous(labels= scales::comma) + 
+  ggtitle('Purchase Frequency - Outliers') +
+  theme(axis.ticks.x = element_blank()) +
+  theme_minimal()
+print(Outliers_Visz)
+
+# Calculate Revenue per CustomerID
+Users_Monetary_Value <- data_fin %>%
+   group_by(user_id) %>%
+  summarise(Monetary_Value=sum(basket))
+  
+# Summary Statistics
+summary(Users_Monetary_Value$Monetary_Value)
+
+#Plotting two sets of users.
+#1st Histogram - Customers below the 3rd Quartile
+#2nd Histogram - Customers with basket greater than 50
+
+MV_3Q <- Users_Monetary_Value %>%
+  filter(Monetary_Value <= 27.4)
+
+MV_Outliers <- Users_Monetary_Value %>%
+  filter(Monetary_Value > 50)
+  
+#Visualizing a histogram of revenue generated by user
+MV_3Q_Visz <- ggplot(MV_3Q, aes(Monetary_Value)) +
+  geom_histogram() +
+  ggtitle('Revenue of Users - Below 27.4') +
+  ylab('Number of Users') +
+  xlab('Revenue') +
+  scale_x_continuous(labels = scales::number) +
+  scale_y_continuous(labels = scales::comma)
+print(MV_3Q_Visz)
+
+# Visualizing histogram of Revenue Outliers
+Outliers_Visz <- ggplot(MV_Outliers, aes(Monetary_Value)) +
+  geom_histogram() +
+  ggtitle('High Revenue Users - Outliers') +
+  ylab('Number of Users') +
+  xlab('Revenue') +
+  scale_x_continuous(labels = scales::number, breaks = c(50, 150, 250, 350, 450)) +
+  scale_y_continuous(labels = scales::comma)
+print(Outliers_Visz)
+
+#From the above visual aspects, we have outlier Frequency per User more than 20, and outlier Monetary value per User more than 150.
+#We need to take this also under consideration.
+
+# Merging Frequency and Monetary Value
+Users_FM <- merge(User_Frequency, Users_Monetary_Value) 
+DT::datatable((Users_FM),
+              rownames = FALSE,
+              options = list(
+                pageLength = 10))
+#Exclude the ones with frequency more than 20 and Value more than 150
+Users_FM_fin <- subset(Users_FM, (Users_FM$Frequency<=20) | (Users_FM$Monetary_Value<=150))
+dim(Users_FM_fin)
+#162880  3 - from the initial Users, we have lost 74 users
+
+#Applying KMeans Clustering
+#The number of clusters is based on business sense. Here we declare 3, and we standardize the data to have standardized variables, to avoid measurement variability
+set.seed(415)
+clusters <- kmeans(scale(Users_FM_fin[,2:3]), 3, nstart = 1)
+
+#Take the cluster information into the Users_FM_fin data frame
+Users_FM_fin$Cluster <- as.factor(clusters$cluster)
+
+#
+KMeans_Results <- Users_FM_fin %>%
+  group_by(Cluster) %>%
+  summarise('Number of Users' = n(),
+            'Frequency Mean' = scales::comma(round(mean(Frequency)),big.mark=","),
+            'Monetary Value Mean' = scales::number(round(mean(Monetary_Value)),big.mark=","),
+            'Cluster Revenue' = scales::number(sum(Monetary_Value),big.mark=",")
+            )
+
+DT::datatable((KMeans_Results),
+              rownames = FALSE) # Display cluster means to identify their value to the business
+
+#We have the following clusters:
+#Medium frequent buyer - Cluster 1
+#39,229 customers
+#Avg number of Purchases, 4
+#Avg Monetary Value of 36
+
+#Sparkler - Cluster 2
+#115,035 customers
+#Avg number of Purchases, 1
+#Avg Monetary Value of 36
+
+#Loyal spender - Cluster 3
+#8,589 customers
+#Avg number of Purchases, 9
+#Avg Monetary Value of 77
+
+#We merge the cluster information into the final data frame
+data_fin_clusters <- merge(data_fin,Users_FM_fin,by="user_id")
+dim(data_fin_clusters)
+#399052     14
+
+#We create the information about the breakfast cuisine per cluster
+df_breakfast <- data_fin_clusters %>%   
+            group_by(cuisine_parent,Cluster) %>%  
+		filter(cuisine_parent=='Breakfast') %>%
+		summarise(customers = n_distinct(user_id),
+		frequency=n_distinct(order_id),monetery= sum(basket),
+    monetery_mean= sum(basket)/n_distinct(order_id))
+		
+#Apparently the customers belonging in the Cluster 3 require to make marketing campaign for Breakfast
+
+
+
+
+
+
+
+
+
+  
+  
