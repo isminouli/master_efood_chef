@@ -1,0 +1,128 @@
+### SQL
+
+This snippet wants to create a table keeping track of the orders related to vendors that are part of a sales activity:
+
+    SELECT * FROM orders
+       WHERE brand = 'EF_GR'
+       AND vendor_id IN (
+           SELECT id FROM bookings)
+       AND day_key >= (SELECT MIN(DATE(created_at))
+           FROM bookings)
+
+The suggestions for the specific code are:
+* Use specific comma separated list of fields and not "*" in terms of performance 
+* Inner join the bookings table instead of nested select in terms of performance 
+* Change the schema in bookings table of the "create_at" field to be date 
+
+_Proposed change_:
+
+    Select <list of specific_columns> 
+    from orders inner join bookings on id = vendor_id 
+    where brand = 'EF_GR' and day_key >= min(date(create_at))
+
+### Python
+
+The following comes from a Python Bootcamp course a colleague is pursuing:
+
+
+    import pandas as pd
+    print(pd.__version__)
+
+    city_names = pd.Series(['San Francisco', 'San Jose', 'Sacramento'])
+    population = pd.Series([852469, 1015785, 485199])
+
+    cities_population_dataframe = pd.DataFrame({ 'City name': city_names, 'Population': population }).describe()
+    california_housing_dataframe = pd.read_csv("https://download.mlcc.google.com/mledu-datasets/california_housing_train.csv", sep=",")
+
+    #print(california_housing_dataframe.describe())
+    #print(cities_population_dataframe.describe())
+    #print(california_housing_dataframe.head())
+
+    cities = pd.DataFrame({ 'City name': city_names, 'Population': population })
+    #print(cities['City name'])
+    #print(cities['Population'])
+
+    cities['Area square miles'] = pd.Series([46.87, 176.53, 97.92])
+    cities['Is wide and has saint name'] = (cities['Area square miles'] > 50) & cities['City name'].apply(lambda name: name.startswith('San'))
+    cities['Is san francisco'] = (cities['City name'] == 'San Francisco')
+    print(cities)
+
+    print(cities.reindex([2, 0, 1]))
+
+
+The suggestions for the specific code are:
+* No need to print pandas version 
+* For readability and code clarity, the fields names need to be in lower cases and with no blanks/white-spaces; change them to underscores 
+* Area square mile should follow the same syntax as city_names and population 
+* There should not be the need for Series rather create a python dataframe as indicated [here](https://www.geeksforgeeks.org/check-if-a-column-starts-with-given-string-in-pandas-dataframe/)
+* The cities_population_dataframe & california_housing_dataframe are not needed
+* The print commands that are commented are not needed
+* The cities dataframe must include the Area square mile column as indicated above for change
+
+### R
+
+This one is a simulation of the distribution of Average Revenue Per User (ARPU):
+
+    # First we are going to set up probability distributions for our beliefs 
+    # about the inputs
+    # We've been told ARPU is about £7 and 
+    # it's very unlikely to be higher than £10 or lower than £4
+    # So we'll go for a normal distribution centred at 7 
+    # with 5% and 95% quantiles at 4 and 10
+
+    #Show how we get the variance
+
+    arpu.sd<-3/1.96
+    x<-seq(0, 15,by=0.5)
+    d<-dnorm(x, 7, arpu.sd)
+    plot(x, d, type='l')
+
+    #Do the same for acquisition and churn
+
+    acq.sd<-0.02/1.96
+    x<-seq(0, 0.2,by=0.001)
+    d<-dnorm(x, 0.05, acq.sd)
+    plot(x, d, type='l')
+
+    ch.sd<-0.01/1.96
+    x<-seq(0, 0.2,by=0.001)
+    d<-dnorm(x, 0.02, ch.sd)
+    plot(x, d, type='l')
+
+    #I'm to lazy to do the maths for this so I'll write a function
+    n.cust<-50000
+
+    revenue<-function(arpu, acq, ch, n.cust){
+  
+      num.cust<-n.cust
+  
+      for (m in 1:12){
+    
+        num.cust<-num.cust+acq*num.cust-ch*num.cust
+      }
+  
+      return(num.cust*arpu)
+  
+    }
+
+    #Now let's simulate 10k values from each of our distributions
+
+    sim.arpu<-rnorm(10000, 7, arpu.sd)
+    sim.acq<-rnorm(10000, 0.05, acq.sd)
+    sim.ch<-rnorm(10000, 0.02, ch.sd)
+
+    #We can then apply the function to these values to get a distribution for end of year revenue
+
+    sim.rev<-mapply(revenue, sim.arpu, sim.acq, sim.ch)
+
+    summary(sim.rev)
+
+    hist(sim.rev)
+    plot(density(sim.rev))
+
+    #Note the distribution is slightly skewed 
+
+_Proposed change_:
+* Use variable names that you can remember what is for; do not use repeatedly names as x,d 
+* Use more constructive code comments i.e "built-in function of revenue"
+* The `n.cust<-50000` needs to be inserted in the functions; inside the {}
