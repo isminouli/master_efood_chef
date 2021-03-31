@@ -258,7 +258,7 @@ df_breakfast <- data_fin_clusters %>%  
     monetery_mean= sum(basket)/n_distinct(order_id))
 		
 #Apparently the customers belonging in the Cluster 3 require to make marketing campaign for Breakfast
-
+#Source: https://rpubs.com/lnoguera/Customer-Segmentation
 
 
 
